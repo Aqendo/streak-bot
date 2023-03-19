@@ -99,9 +99,7 @@ async def database_transaction_middleware(
             select(Users).where(Users.user_id == event.from_user.id)
         )
         session_result = session_result.scalar()
-        if session_result is None:
-            return
-        if (
+        if session_result is not None and (
             session_result.name != event.from_user.full_name
             or session_result.username != event.from_user.username
         ):
@@ -362,7 +360,7 @@ async def turn_scoreboard(callback_query: CallbackQuery):
         await asyncio.sleep(TIMEOUT_SCOREBOARD_IN_SECONDS)
 
 
-@router.message(Command(commands=["setstreak"]))
+@router.message(Command(commands=["setstreak", "setStreak"]))
 async def register_handler(message: Message) -> None:
     days = message.text.split(" ", 1)[-1]
     if not days.isnumeric() or int(days) > 100000:
@@ -386,6 +384,7 @@ async def register_handler(message: Message) -> None:
 
 async def main() -> None:
     await create_all()
+    logging.info("created")
     bot = Bot(TOKEN, parse_mode="HTML")
     await dp.start_polling(bot)
 
