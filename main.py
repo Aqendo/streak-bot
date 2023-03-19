@@ -1,8 +1,8 @@
 import asyncio
 import logging
 import os
+from typing import Any, Awaitable, Callable, Dict
 import aiogram
-
 
 from sqlalchemy import BigInteger, String, desc
 from sqlalchemy import func
@@ -20,6 +20,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
+    Update,
 )
 import datetime
 from aiogram import F
@@ -83,7 +84,16 @@ async def create_all():
         await conn.run_sync(Groups.metadata.create_all)
 
 
-async def check_names_and_usernames(event: Message | CallbackQuery):
+@dp.update.outer_middleware()
+async def database_transaction_middleware(
+    handler: Callable[[Update, Dict[str, Any]], Awaitable[Any]],
+    event: Update,
+    data: Dict[str, Any],
+) -> Any:
+    event_old = event
+    event = event.callback_query or event.message
+    if event is None:
+        return
     async with async_session() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == event.from_user.id)
@@ -99,6 +109,7 @@ async def check_names_and_usernames(event: Message | CallbackQuery):
             session_result.username = event.from_user.username
             session.add(session_result)
             await session.commit()
+    return await handler(event_old, data)
 
 
 @router.message(Command(commands=["start"]))
@@ -108,7 +119,6 @@ async def command_start_handler(message: Message) -> None:
 
 @router.message(Command(commands=["enablescoreboard", "enableScoreboard"]))
 async def enablescoreboard_handler(message: Message) -> None:
-    await check_names_and_usernames(message)
     if message.chat.id == message.from_user.id:
         await message.reply("🚫 You can't enable scoreboards in private chat.")
         return
@@ -163,7 +173,6 @@ async def enablescoreboard_handler(message: Message) -> None:
 
 @router.message(Command(commands=["streak"]))
 async def register_handler(message: Message) -> None:
-    await check_names_and_usernames(message)
     async with async_session() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == message.from_user.id)
@@ -342,7 +351,6 @@ async def scoreboard(callback_query: CallbackQuery):
 
 @router.callback_query(F.data.startswith("turn_"))
 async def turn_scoreboard(callback_query: CallbackQuery):
-    await check_names_and_usernames(callback_query)
     if callback_query.from_user.id != int(
         callback_query.data.split("_", 1)[1]
     ):
@@ -356,7 +364,6 @@ async def turn_scoreboard(callback_query: CallbackQuery):
 
 @router.message(Command(commands=["setstreak"]))
 async def register_handler(message: Message) -> None:
-    await check_names_and_usernames(message)
     days = message.text.split(" ", 1)[-1]
     if not days.isnumeric() or int(days) > 100000:
         return
