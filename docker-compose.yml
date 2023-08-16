@@ -1,0 +1,15 @@
+services:
+  bot:
+    container_name: bot
+    build: .
+    restart: unless-stopped
+  db:
+    image: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: login
+      POSTGRES_PASSWORD: password
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_DB: database
+    volumes:
+      - ./data:/var/lib/postgresql/data
