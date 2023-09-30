@@ -303,10 +303,9 @@ async def cancel_relapse(callback_query: CallbackQuery):
         await callback_query.message.edit_text(
             f"""🗑 Sad to see your streak of {days} days go down the drain.
 
-
 I started a new streak for you.
 
-🍀 Good luck, {callback_query.message.from_user.full_name}, you will need it.
+🍀 Good luck, {callback_query.from_user.full_name}, you will need it.
 
 👉🏻 Check the <a href='https://easypeasymethod.org/'>easypeasy</a> method, it might help you.""",
             disable_web_page_preview=True,
