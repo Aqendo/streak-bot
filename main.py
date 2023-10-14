@@ -4,7 +4,7 @@ import os
 from typing import Any, Awaitable, Callable, Dict
 import aiogram
 
-from sqlalchemy import BigInteger, String, desc
+from sqlalchemy import BigInteger, String, desc, asc
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -318,12 +318,12 @@ async def scoreboard(callback_query: CallbackQuery):
             select(Users)
             .join(Groups, Users.user_id == Groups.user_id)
             .filter(Groups.group_id == callback_query.message.chat.id)
-            .order_by(desc(Users.streak))
+            .order_by(asc(Users.streak))
             .limit(50)
         )
         old_message = ""
         message_result = "🏆 Scoreboard\n\n"
-        for id, users_tuple in enumerate(session_result.all()[::-1]):
+        for id, users_tuple in enumerate(session_result.all()):
             username = users_tuple[0].username
             name_text = users_tuple[0].name
             username_text = ""
