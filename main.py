@@ -262,7 +262,7 @@ async def cancel_relapse(callback_query: CallbackQuery):
         callback_query.data.split("_", 1)[1]
     ):
         await callback_query.answer(
-            "username🚫 This button was not meant for you"
+            "🚫 This button was not meant for you"
         )
         return
     await callback_query.message.edit_text("🆗 Cancelled.")
