@@ -276,38 +276,44 @@ async def help(message: Message):
 /enableScoreboard - ✅  make your account show up on the scoreboard
 /setStreak - ⚙️ +daysCount, set a custom streak
 /stats - 📊 display some statistics 
-/check - 🔧 +id, deletes account from scoreboard if it's deleted
+/check - 🔧 id/username, deletes account from scoreboard if it's deleted
 """
     )
 
 @router.message(Command(commands=["check"]))
 async def help(message: Message, bot: Bot):
-    user_id_to_delete = message.text.split(" ", 1)[-1]
-    if not user_id_to_delete.isnumeric():
-        await message.reply("You should provide me ID of this user.\nExample: /check 5488357781")
-        return
-    user_id_to_delete = int(user_id_to_delete)
-    member = None
-    try:
-        member = await bot.get_chat_member(message.chat.id, user_id_to_delete)
-    except:
-        await message.reply("Query failed. If you sure you entered right ID, then wait some time to Telegram to wake up from maintenance or something.")
-        return
-    if not member: return
-    if member.user.first_name != "":
-        await message.reply("This user is alive and hasn't deleted his account yet.")
-        return
+    user_to_delete = message.text.split(" ", 1)[-1]
     async with async_session() as session:
-        session_result = await session.scalar(
-            select(Users).where(Users.user_id == user_id_to_delete)
-        )
-        if not session_result:
-            await message.reply("This user never used me! How can I delete it from my database?")
+        if not user_to_delete.isnumeric():
+            user_result = await session.scalar(
+                select(Users).where(Users.username == user_to_delete.strip("@"))
+            )
+            if not user_result:
+                await message.reply("This user never used me")
+                return
+            user_to_delete = user_result.user_id
+        else:
+            user_result = await session.scalar(
+                select(Users).where(Users.user_id == int(user_to_delete))
+            )
+            if not user_result:
+                await message.reply("This user never used me")
+                return
+            user_to_delete = int(user_to_delete)
+        member = None
+        try:
+            member = await bot.get_chat_member(message.chat.id, user_to_delete)
+        except:
+            await message.reply("Query failed. If you sure you entered right ID, then wait some time to Telegram to wake up from maintenance or something.")
             return
-        await session.execute(delete(Users).where(Users.user_id == user_id_to_delete))
-        await session.execute(delete(Groups).where(Groups.user_id == user_id_to_delete))
+        if not member: return
+        if member.user.first_name != "" and member.user.first_name != "Deleted Account":
+            await message.reply("This user is alive and hasn't deleted his account yet.")
+            return
+        await session.delete(user_result)
+        await session.execute(delete(Groups).where(Groups.user_id == user_to_delete))
         await session.commit()
-        await message.answer(f"Succesfully removed account with id {user_id_to_delete} from my database.")
+        await message.answer(f"Succesfully removed account with id {user_to_delete} from my database.")
         
     
 
