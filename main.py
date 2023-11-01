@@ -4,7 +4,7 @@ import os
 from typing import Any, Awaitable, Callable, Dict
 import aiogram
 
-from sqlalchemy import BigInteger, String, desc, asc
+from sqlalchemy import BigInteger, String, delete, desc, asc
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -274,10 +274,42 @@ async def help(message: Message):
         """/streak - 🍀 start a new streak
 /relapse - 🗑 relapse a streak
 /enableScoreboard - ✅  make your account show up on the scoreboard
-/setStreak - ⚙️ set a custom streak
+/setStreak - ⚙️ +daysCount, set a custom streak
 /stats - 📊 display some statistics 
+/check - 🔧 +id, deletes account from scoreboard if it's deleted
 """
     )
+
+@router.message(Command(commands=["check"]))
+async def help(message: Message, bot: Bot):
+    user_id_to_delete = message.text.split(" ", 1)[-1]
+    if not user_id_to_delete.isnumeric():
+        await message.reply("You should provide me ID of this user.\nExample: /check 5488357781")
+        return
+    user_id_to_delete = int(user_id_to_delete)
+    member = None
+    try:
+        member = await bot.get_chat_member(message.chat.id, user_id_to_delete)
+    except:
+        await message.reply("Query failed. If you sure you entered right ID, then wait some time to Telegram to wake up from maintenance or something.")
+        return
+    if not member: return
+    if member.user.first_name != "":
+        await message.reply("This user is alive and hasn't deleted his account yet.")
+        return
+    async with async_session() as session:
+        session_result = await session.scalar(
+            select(Users).where(Users.user_id == user_id_to_delete)
+        )
+        if not session_result:
+            await message.reply("This user never used me! How can I delete it from my database?")
+            return
+        await session.execute(delete(Users).where(Users.user_id == user_id_to_delete))
+        await session.execute(delete(Groups).where(Groups.user_id == user_id_to_delete))
+        await session.commit()
+        await message.answer(f"Succesfully removed account with id {user_id_to_delete} from my database.")
+        
+    
 
 
 @router.callback_query(F.data.startswith("relapse_"))
