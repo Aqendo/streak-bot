@@ -276,12 +276,15 @@ async def help(message: Message):
 /enableScoreboard - ✅  make your account show up on the scoreboard
 /setStreak - ⚙️ +daysCount, set a custom streak
 /stats - 📊 display some statistics 
-/check - 🔧 id/username, deletes account from scoreboard if it's deleted
+/check - 🔧 id/username, deletes account from scoreboard if it's been deleted
 """
     )
 
 @router.message(Command(commands=["check"]))
 async def help(message: Message, bot: Bot):
+    if message.text.strip() == "/check":
+        await message.reply("❌ Not enough arguments\.\n**USAGE**:\n`/check \<\+id/\+username\>`\n\n_Deletes an account from scoreboard if it's been deleted_", parse_mode="MarkdownV2")
+        return
     user_to_delete = message.text.split(" ", 1)[-1]
     async with async_session() as session:
         if not user_to_delete.isnumeric():
