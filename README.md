@@ -1,13 +1,24 @@
 Streak Telegram Bot
 ===
 
+## Features
+- Count your streak
+- Count total days of preventing addiction
+- Collaborate with friends in groups
+- Leaderboard by streak days
+- Convenient use
+- Docker support
+- Written in [Aiogram](https://github.com/aiogram/aiogram)
+- MIT License :)
 
-# Installing
+## Try it out
+There is a public instance of this bot located at [@streakaqbot](https://t.me/streakaqbot)
+
+## Installing
 
 Install requirements:
 
-```bash
-$ pip install -r requirements.txt 
+```console
 $ cp .env{.example,}
 ```
 Editing `.env` file:
@@ -25,6 +36,9 @@ TIMEOUT_SCOREBOARD_IN_SECONDS=360
 - SQLALCHEMY_ECHO - Every SQL transaction will be echoed. `true` or `false`
 - TIMEOUT_SCOREBOARD_IN_SECONDS - Every X seconds scoreboards will be refreshed.
 
+```console
+$ docker-compose up -d --build
+```
 ## LICENSE
 
-This product is licensed by the **GNU Lesser General Public License v3.0**. [LICENSE](/aqendo/streak-bot/src/branch/master/LICENSE)
+This product is licensed by the **MIT License**. [LICENSE](/LICENSE)
