@@ -60,7 +60,7 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 POSTGRES_HOST = os.getenv("POSTGRES_HOST")
 POSTGRES_DB = os.getenv("POSTGRES_DB")
 SQLALCHEMY_ECHO = True if os.getenv("SQLALCHEMY_ECHO") == "true" else False
-TIMEOUT_SCOREBOARD_IN_SECONDS = int(os.getenv("TIMEOUT_SCOREBOARD_IN_SECONDS"))
+TIMEOUT_SCOREBOARD_IN_SECONDS = int(os.getenv("TIMEOUT_SCOREBOARD_IN_SECONDS") or 180)
 TOKEN = os.getenv("TOKEN")
 
 engine = create_async_engine(
@@ -78,7 +78,7 @@ dp = Dispatcher()
 dp.include_router(router)
 
 
-async def create_all():
+async def create_all() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Users.metadata.create_all)
         await conn.run_sync(Groups.metadata.create_all)
@@ -257,7 +257,7 @@ async def relapse_handler(message: Message) -> None:
 
 
 @router.callback_query(F.data.startswith("cancel_"))
-async def cancel_relapse(callback_query: CallbackQuery):
+async def cancel_relapse(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(
         callback_query.data.split("_", 1)[1]
     ):
@@ -269,7 +269,7 @@ async def cancel_relapse(callback_query: CallbackQuery):
 
 
 @router.message(Command(commands=["help"]))
-async def help(message: Message):
+async def help(message: Message) -> None:
     await message.reply(
         """/streak - 🍀 start a new streak
 /relapse - 🗑 relapse a streak
@@ -281,7 +281,7 @@ async def help(message: Message):
     )
 
 @router.message(Command(commands=["check"]))
-async def help(message: Message, bot: Bot):
+async def check(message: Message, bot: Bot) -> None:
     if message.text.strip() == "/check":
         await message.reply("❌ Not enough arguments\.\n**USAGE**:\n`/check \<\+id/\+username\>`\n\n_Deletes an account from scoreboard if it's been deleted_", parse_mode="MarkdownV2")
         return
@@ -322,7 +322,7 @@ async def help(message: Message, bot: Bot):
 
 
 @router.callback_query(F.data.startswith("relapse_"))
-async def cancel_relapse(callback_query: CallbackQuery):
+async def register_a_relapse(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(
         callback_query.data.split("_", 1)[1]
     ):
@@ -353,7 +353,7 @@ I started a new streak for you.
         )
 
 
-async def scoreboard(callback_query: CallbackQuery):
+async def scoreboard(callback_query: CallbackQuery) -> None:
     async with async_session() as session:
         session_result = await session.execute(
             select(Users)
@@ -388,7 +388,7 @@ async def scoreboard(callback_query: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("turn_"))
-async def turn_scoreboard(callback_query: CallbackQuery):
+async def turn_scoreboard(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(
         callback_query.data.split("_", 1)[1]
     ):
@@ -401,7 +401,7 @@ async def turn_scoreboard(callback_query: CallbackQuery):
 
 
 @router.message(Command(commands=["setstreak", "setStreak"]))
-async def register_handler(message: Message) -> None:
+async def set_streak(message: Message) -> None:
     days = message.text.split(" ", 1)[-1]
     if not days.isnumeric() or int(days) > 100000:
         return
