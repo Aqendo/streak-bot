@@ -47,9 +47,7 @@ class Users(Base):
     user_id: Mapped[int] = mapped_column(BigInteger())
     name: Mapped[str] = mapped_column(String())
     username: Mapped[str] = mapped_column(String(), nullable=True)
-    streak: Mapped[datetime.datetime] = mapped_column(
-        server_default=func.now()
-    )
+    streak: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     attempts: Mapped[int]
     maximum_days: Mapped[int] = mapped_column(BigInteger())
     all_days: Mapped[int] = mapped_column(BigInteger())
@@ -136,9 +134,7 @@ async def enablescoreboard_handler(message: Message) -> None:
         )
         session_result = session_result.scalar()
         if session_result is None:
-            session.add(
-                Groups(user_id=message.from_user.id, group_id=message.chat.id)
-            )
+            session.add(Groups(user_id=message.from_user.id, group_id=message.chat.id))
             await session.commit()
             await message.reply(
                 "✅ You are now appearing on the scoreboard.",
@@ -227,6 +223,37 @@ async def stats_handler(message: Message) -> None:
         )
 
 
+@router.message(Command(commands=["deleteAllDataAboutMe", "deletealldataaboutme"]))
+async def deleteAllDataAboutMe_handler(message: Message) -> None:
+    async with async_session() as session:
+        session_result = await session.execute(
+            select(Users).where(Users.user_id == message.from_user.id)
+        )
+        session_result = session_result.scalar()
+        if session_result is None:
+            await message.reply(
+                "I don't have any info about you at the moment. You can register a streak with /streak command."
+            )
+            return
+        await message.reply(
+            "Are you sure you want to delete <b>ALL</b> data about yourself? This is <b>IRREVERSIBLE</b> and no one on the entire planet Earth will be able to restore your streaks!",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="Yes",
+                            callback_data=f"remove_{message.from_user.id}",
+                        ),
+                        InlineKeyboardButton(
+                            text="No",
+                            callback_data=f"cancel_{message.from_user.id}",
+                        ),
+                    ]
+                ]
+            ),
+        )
+
+
 @router.message(Command(commands=["relapse"]))
 async def relapse_handler(message: Message) -> None:
     async with async_session() as session:
@@ -258,12 +285,8 @@ async def relapse_handler(message: Message) -> None:
 
 @router.callback_query(F.data.startswith("cancel_"))
 async def cancel_relapse(callback_query: CallbackQuery) -> None:
-    if callback_query.from_user.id != int(
-        callback_query.data.split("_", 1)[1]
-    ):
-        await callback_query.answer(
-            "🚫 This button was not meant for you"
-        )
+    if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
+        await callback_query.answer("🚫 This button was not meant for you")
         return
     await callback_query.message.edit_text("🆗 Cancelled.")
 
@@ -277,13 +300,22 @@ async def help(message: Message) -> None:
 /setStreak - ⚙️ +daysCount, set a custom streak
 /stats - 📊 display some statistics 
 /check - 🔧 id/username, deletes account from scoreboard if it's been deleted
-"""
+/deleteAllDataAboutMe - 🗑 Delete all data about yourself
+
+If you like this bot and want to support development, consider giving this project a star on GitHub:
+https://github.com/Aqendo/streak-bot
+""",
+        disable_web_page_preview=True,
     )
+
 
 @router.message(Command(commands=["check"]))
 async def check(message: Message, bot: Bot) -> None:
     if message.text.strip() == "/check":
-        await message.reply("❌ Not enough arguments\.\n**USAGE**:\n`/check \<\+id/\+username\>`\n\n_Deletes an account from scoreboard if it's been deleted_", parse_mode="MarkdownV2")
+        await message.reply(
+            "❌ Not enough arguments\.\n**USAGE**:\n`/check \<\+id/\+username\>`\n\n_Deletes an account from scoreboard if it's been deleted_",
+            parse_mode="MarkdownV2",
+        )
         return
     user_to_delete = message.text.split(" ", 1)[-1]
     async with async_session() as session:
@@ -307,25 +339,28 @@ async def check(message: Message, bot: Bot) -> None:
         try:
             member = await bot.get_chat_member(message.chat.id, user_to_delete)
         except:
-            await message.reply("Query failed. If you sure you entered right ID, then wait some time to Telegram to wake up from maintenance or something.")
+            await message.reply(
+                "Query failed. If you sure you entered right ID, then wait some time to Telegram to wake up from maintenance or something."
+            )
             return
-        if not member: return
+        if not member:
+            return
         if member.user.first_name != "" and member.user.first_name != "Deleted Account":
-            await message.reply("This user is alive and hasn't deleted his account yet.")
+            await message.reply(
+                "This user is alive and hasn't deleted his account yet."
+            )
             return
         await session.delete(user_result)
         await session.execute(delete(Groups).where(Groups.user_id == user_to_delete))
         await session.commit()
-        await message.answer(f"Succesfully removed account with id {user_to_delete} from my database.")
-        
-    
+        await message.answer(
+            f"Succesfully removed account with id {user_to_delete} from my database."
+        )
 
 
 @router.callback_query(F.data.startswith("relapse_"))
 async def register_a_relapse(callback_query: CallbackQuery) -> None:
-    if callback_query.from_user.id != int(
-        callback_query.data.split("_", 1)[1]
-    ):
+    if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
         await callback_query.answer("🚫 This button was not meant for you")
         return
     async with async_session() as session:
@@ -353,6 +388,24 @@ I started a new streak for you.
         )
 
 
+@router.callback_query(F.data.startswith("remove_"))
+async def remove_all_data_logic(callback_query: CallbackQuery) -> None:
+    if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
+        await callback_query.answer("🚫 This button was not meant for you")
+        return
+    async with async_session() as session:
+        deletion_result_users = await session.execute(
+            delete(Users).where(Users.user_id == callback_query.from_user.id)
+        )
+        deletion_result_groups = await session.execute(
+            delete(Groups).where(Groups.user_id == callback_query.from_user.id)
+        )
+        await session.commit()
+        await callback_query.message.edit_text(
+            f"""🗑 From now I know nothing about you! All your data was erased forever. If you want to start again, just use /streak command.""",
+        )
+
+
 async def scoreboard(callback_query: CallbackQuery) -> None:
     async with async_session() as session:
         session_result = await session.execute(
@@ -372,7 +425,9 @@ async def scoreboard(callback_query: CallbackQuery) -> None:
             if username is not None:
                 username_text = " (@" + username + ")"
             else:
-                name_text = f"<a href='tg://user?id={users_tuple[0].user_id}'>{name_text}</a>"
+                name_text = (
+                    f"<a href='tg://user?id={users_tuple[0].user_id}'>{name_text}</a>"
+                )
 
             message_result += "%d. %s %s — <b>%d %s</b>\n" % (
                 id + 1,
@@ -389,9 +444,7 @@ async def scoreboard(callback_query: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("turn_"))
 async def turn_scoreboard(callback_query: CallbackQuery) -> None:
-    if callback_query.from_user.id != int(
-        callback_query.data.split("_", 1)[1]
-    ):
+    if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
         await callback_query.answer("🚫 This button was not meant for you")
         return
     scoreboards[callback_query.chat_instance] = callback_query.message
@@ -414,9 +467,7 @@ async def set_streak(message: Message) -> None:
     if session_result is None:
         await message.answer("↪️ Use /streak to start a new streak.")
         return
-    session_result.streak = datetime.datetime.now() - datetime.timedelta(
-        days=days
-    )
+    session_result.streak = datetime.datetime.now() - datetime.timedelta(days=days)
     session.add(session_result)
     await session.commit()
     await message.answer("Done")
