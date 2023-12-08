@@ -220,7 +220,7 @@ async def stats_handler(message: Message) -> None:
         await message.reply(
             f"""Hey {message.from_user.full_name}, these are your stats.
 
-📅 You went {session_result.all_days} days without relapsing
+📅 You went {session_result.all_days + days} days without relapsing
 ⚡️ Your highest streak is {session_result.maximum_days} days
 💂 This is your {days_text} attempt
 🔥 Your current streak is {days} days long"""
