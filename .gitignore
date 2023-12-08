@@ -1,3 +1,6 @@
 venv/
 .env
 data/
+.mypy_cache/
+alembic/__pycache__/
+__pycache__

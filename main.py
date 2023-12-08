@@ -4,7 +4,7 @@ import os
 from typing import Any, Awaitable, Callable, Dict
 import aiogram
 
-from sqlalchemy import BigInteger, String, delete, desc, asc
+from sqlalchemy import BigInteger, String, delete, desc, asc, Boolean
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -15,12 +15,14 @@ from sqlalchemy.orm import mapped_column
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import Command
+from aiogram.filters.command import CommandObject
 from aiogram.types import (
     Message,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
     Update,
+    BotCommand
 )
 import datetime
 from aiogram import F
@@ -38,6 +40,7 @@ class Groups(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger())
     group_id: Mapped[int] = mapped_column(BigInteger())
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Users(Base):
@@ -60,7 +63,10 @@ POSTGRES_DB = os.getenv("POSTGRES_DB")
 SQLALCHEMY_ECHO = True if os.getenv("SQLALCHEMY_ECHO") == "true" else False
 TIMEOUT_SCOREBOARD_IN_SECONDS = int(os.getenv("TIMEOUT_SCOREBOARD_IN_SECONDS") or 180)
 TOKEN = os.getenv("TOKEN")
-
+BASE_REPO = os.getenv("BASE_REPO") or "https://github.com/Aqendo/streak-bot"
+SHOW_BASE_REPO_IN_HELP = (
+    True if os.getenv("SHOW_BASE_REPO_IN_HELP") == "true" else False
+)
 engine = create_async_engine(
     f"postgresql+asyncpg://{POSTGRES_LOGIN}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}/{POSTGRES_DB}",
     echo=SQLALCHEMY_ECHO,
@@ -213,7 +219,7 @@ async def stats_handler(message: Message) -> None:
             if 4 <= attempts % 100 <= 20
             else {1: "st", 2: "nd", 3: "rd"}.get(attempts % 10, "th")
         )
-        await message.reply(
+        return message.reply(
             f"""Hey {message.from_user.full_name}, these are your stats.
 
 📅 You went {session_result.all_days + days} days without relapsing
@@ -293,31 +299,116 @@ async def cancel_relapse(callback_query: CallbackQuery) -> None:
 
 @router.message(Command(commands=["help"]))
 async def help(message: Message) -> None:
-    await message.reply(
-        """/streak - 🍀 start a new streak
+    message_to_reply = """/streak - 🍀 start a new streak
 /relapse - 🗑 relapse a streak
 /enableScoreboard - ✅  make your account show up on the scoreboard
-/setStreak - ⚙️ +daysCount, set a custom streak
+/setStreak <daysCount> - ⚙️ set a custom streak
 /stats - 📊 display some statistics 
-/check - 🔧 id/username, deletes account from scoreboard if it's been deleted
+/check <id/username> - 🔧  deletes account from scoreboard if it's been deleted
 /deleteAllDataAboutMe - 🗑 Delete all data about yourself
-
-If you like this bot and want to support development, consider giving this project a star on GitHub:
-https://github.com/Aqendo/streak-bot
-""",
+/removeFromLeaderboard <id/username> - 🗑 Remove user from leaderboard of this group (admin-only!)
+/returnToLeaderboard <id/username> - 🗑 Return user to leaderboard of this group, if it's banned (admin-only!)
+"""
+    if SHOW_BASE_REPO_IN_HELP:
+        message_to_reply += (
+            """\nIf you like this bot and want to support development, consider giving this project a star on GitHub:
+"""
+            + BASE_REPO
+        )
+    await message.reply(
+        message_to_reply,
         disable_web_page_preview=True,
+        parse_mode=None
     )
+
+@router.message(Command(commands=["removeFromLeaderboard", "removefromleaderboard"]))
+async def check(message: Message, bot: Bot, command: CommandObject) -> None:
+    if message.chat.id == message.from_user.id:
+        await message.reply("❌ This command works only in groups.")
+        return
+    if not command.args:
+        await message.reply(
+            "❌ Not enough arguments\.\n**USAGE**:\n`/removeFromLeaderboard \<\+id/\+username\>`\n\n_Deletes an account from scoreboard \(admins only\)_",
+            parse_mode="MarkdownV2",
+        )
+        return
+    user_to_delete = command.args
+    async with async_session() as session:
+        if not user_to_delete.isnumeric():
+            user_result = await session.scalar(
+                select(Users).where(Users.username == user_to_delete.strip("@"))
+            )
+            if not user_result:
+                await message.reply("This user never used me")
+                return
+            user_to_delete = user_result.user_id
+        user_to_delete = int(user_to_delete)
+        user = await session.scalar(select(Groups).where(Groups.group_id == message.chat.id, Groups.user_id == user_to_delete))
+        user.is_banned = True
+        try:
+            user_who_deletes = await bot.get_chat_member(message.chat.id, message.from_user.id)
+        except:
+            await message.reply("I can't get chat admins! Please report this error to the support group.")
+            return
+        if not user_who_deletes.can_restrict_members and user_who_deletes.status != 'creator':
+            await message.reply(str(user_who_deletes))
+            await message.reply("This command is admin-only (with ability to restrict members)!")
+            return
+        session.add(user)
+        await session.commit()
+        await message.answer(
+            f"Succesfully removed account with id {user_to_delete} from scoreboard of this group."
+        )
+
+@router.message(Command(commands=["returnToLeaderboard", "returntoleaderboard"]))
+async def check(message: Message, bot: Bot, command: CommandObject) -> None:
+    if message.chat.id == message.from_user.id:
+        await message.reply("❌ This command works only in groups.")
+        return
+    if not command.args:
+        await message.reply(
+            "❌ Not enough arguments\.\n**USAGE**:\n`/returnToLeaderboard \<\+id/\+username\>`\n\Returns an account to scoreboard if it's banned \(admins only\)_",
+            parse_mode="MarkdownV2",
+        )
+        return
+    user_to_delete = command.args
+    async with async_session() as session:
+        if not user_to_delete.isnumeric():
+            user_result = await session.scalar(
+                select(Users).where(Users.username == user_to_delete.strip("@"))
+            )
+            if not user_result:
+                await message.reply("This user never used me")
+                return
+            user_to_delete = user_result.user_id
+        user_to_delete = int(user_to_delete)
+        user = await session.scalar(select(Groups).where(Groups.group_id == message.chat.id, Groups.user_id == user_to_delete))
+        user.is_banned = False
+        try:
+            user_who_deletes = await bot.get_chat_member(message.chat.id, message.from_user.id)
+        except:
+            await message.reply("I can't get chat admins! Please report this error to the support group.")
+            return
+        if not user_who_deletes.can_restrict_members and user_who_deletes.status != 'creator':
+            await message.reply(str(user_who_deletes))
+            await message.reply("This command is admin-only (with ability to restrict members)!")
+            return
+        session.add(user)
+        await session.commit()
+        await message.answer(
+            f"Succesfully returned an account with id {user_to_delete} to scoreboard of this group."
+        )
 
 
 @router.message(Command(commands=["check"]))
-async def check(message: Message, bot: Bot) -> None:
-    if message.text.strip() == "/check":
+async def check(message: Message, bot: Bot, command: CommandObject) -> None:
+    if not command.args:
         await message.reply(
             "❌ Not enough arguments\.\n**USAGE**:\n`/check \<\+id/\+username\>`\n\n_Deletes an account from scoreboard if it's been deleted_",
             parse_mode="MarkdownV2",
         )
         return
-    user_to_delete = message.text.split(" ", 1)[-1]
+    user_to_delete = command.args
     async with async_session() as session:
         if not user_to_delete.isnumeric():
             user_result = await session.scalar(
@@ -411,7 +502,7 @@ async def scoreboard(callback_query: CallbackQuery) -> None:
         session_result = await session.execute(
             select(Users)
             .join(Groups, Users.user_id == Groups.user_id)
-            .filter(Groups.group_id == callback_query.message.chat.id)
+            .filter(Groups.group_id == callback_query.message.chat.id, Groups.is_banned == False)
             .order_by(asc(Users.streak))
             .limit(50)
         )

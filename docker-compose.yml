@@ -13,3 +13,5 @@ services:
       POSTGRES_DB: database
     volumes:
       - ./data:/var/lib/postgresql/data
+    ports:
+      - "5444:5432"
