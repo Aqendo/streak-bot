@@ -7,6 +7,11 @@ Streak Telegram Bot
 - Collaborate with friends in groups
 - Leaderboard by streak days
 - Convenient use
+- Admins can remove cheaters from leaderboard
+- Admins can return people to leaderboard
+- Users can delete all info about theirselfs
+- PostgreSQL
+- Async
 - Docker support
 - Written in [Aiogram](https://github.com/aiogram/aiogram)
 - MIT License :)
