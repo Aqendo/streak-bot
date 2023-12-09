@@ -1,79 +1,51 @@
 import asyncio
+import datetime
 import logging
-import os
-from typing import Any, Awaitable, Callable, Dict
+
 import aiogram
-
-from sqlalchemy import BigInteger, String, delete, desc, asc, Boolean
-from sqlalchemy import func
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-
-from aiogram import Bot, Dispatcher, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.filters.command import CommandObject
 from aiogram.types import (
-    Message,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
     CallbackQuery,
-    Update,
-    BotCommand
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
 )
-import datetime
-from aiogram import F
-from dotenv import load_dotenv, find_dotenv
+from dotenv import find_dotenv, load_dotenv
+from kink import di
+from sqlalchemy import asc, delete, select
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from consts import (
+    BASE_REPO,
+    POSTGRES_DB,
+    POSTGRES_HOST,
+    POSTGRES_LOGIN,
+    POSTGRES_PASSWORD,
+    SHOW_BASE_REPO_IN_HELP,
+    SQLALCHEMY_ECHO,
+    TIMEOUT_SCOREBOARD_IN_SECONDS,
+    TOKEN,
+)
+from messages import get_help_message, get_relapse_message, get_stats_text
+from middlewares.update_usernames import update_users_info
+from models.database import Groups, Users
 
 load_dotenv(find_dotenv())
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-class Groups(Base):
-    __tablename__ = "groups"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigInteger())
-    group_id: Mapped[int] = mapped_column(BigInteger())
-    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
-
-
-class Users(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigInteger())
-    name: Mapped[str] = mapped_column(String())
-    username: Mapped[str] = mapped_column(String(), nullable=True)
-    streak: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-    attempts: Mapped[int]
-    maximum_days: Mapped[int] = mapped_column(BigInteger())
-    all_days: Mapped[int] = mapped_column(BigInteger())
-
-
-POSTGRES_LOGIN = os.getenv("POSTGRES_LOGIN")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST")
-POSTGRES_DB = os.getenv("POSTGRES_DB")
-SQLALCHEMY_ECHO = True if os.getenv("SQLALCHEMY_ECHO") == "true" else False
-TIMEOUT_SCOREBOARD_IN_SECONDS = int(os.getenv("TIMEOUT_SCOREBOARD_IN_SECONDS") or 180)
-TOKEN = os.getenv("TOKEN")
-BASE_REPO = os.getenv("BASE_REPO") or "https://github.com/Aqendo/streak-bot"
-SHOW_BASE_REPO_IN_HELP = (
-    True if os.getenv("SHOW_BASE_REPO_IN_HELP") == "true" else False
-)
-engine = create_async_engine(
+di["engine"] = create_async_engine(
     f"postgresql+asyncpg://{POSTGRES_LOGIN}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}/{POSTGRES_DB}",
     echo=SQLALCHEMY_ECHO,
 )
 
-async_session = async_sessionmaker(engine, expire_on_commit=False)
-
+di["async_session"] = async_sessionmaker(di["engine"], expire_on_commit=False)
 
 router = Router()
 pool = None
@@ -83,35 +55,13 @@ dp.include_router(router)
 
 
 async def create_all() -> None:
-    async with engine.begin() as conn:
+    conn: AsyncConnection
+    async with di["engine"].begin() as conn:
         await conn.run_sync(Users.metadata.create_all)
         await conn.run_sync(Groups.metadata.create_all)
 
 
-@dp.update.outer_middleware()
-async def database_transaction_middleware(
-    handler: Callable[[Update, Dict[str, Any]], Awaitable[Any]],
-    event: Update,
-    data: Dict[str, Any],
-) -> Any:
-    event_old = event
-    event = event.callback_query or event.message
-    if event is None:
-        return
-    async with async_session() as session:
-        session_result = await session.execute(
-            select(Users).where(Users.user_id == event.from_user.id)
-        )
-        session_result = session_result.scalar()
-        if session_result is not None and (
-            session_result.name != event.from_user.full_name
-            or session_result.username != event.from_user.username
-        ):
-            session_result.name = event.from_user.full_name
-            session_result.username = event.from_user.username
-            session.add(session_result)
-            await session.commit()
-    return await handler(event_old, data)
+dp.update.outer_middleware.register(update_users_info)
 
 
 @router.message(Command(commands=["start"]))
@@ -124,7 +74,8 @@ async def enablescoreboard_handler(message: Message) -> None:
     if message.chat.id == message.from_user.id:
         await message.reply("🚫 You can't enable scoreboards in private chat.")
         return
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == message.from_user.id)
         )
@@ -173,7 +124,8 @@ async def enablescoreboard_handler(message: Message) -> None:
 
 @router.message(Command(commands=["streak"]))
 async def register_handler(message: Message) -> None:
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == message.from_user.id)
         )
@@ -203,7 +155,8 @@ async def register_handler(message: Message) -> None:
 
 @router.message(Command(commands=["stats"]))
 async def stats_handler(message: Message) -> None:
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == message.from_user.id)
         )
@@ -214,18 +167,20 @@ async def stats_handler(message: Message) -> None:
         attempts = session_result.attempts
         days = (datetime.datetime.now() - session_result.streak).days
 
+        # I believe this was taken from here: https://stackoverflow.com/questions/3644417/python-format-datetime-with-st-nd-rd-th-english-ordinal-suffix-likes
         days_text = str(attempts) + (
             "th"
             if 4 <= attempts % 100 <= 20
             else {1: "st", 2: "nd", 3: "rd"}.get(attempts % 10, "th")
         )
         message_stats = await message.reply(
-            f"""Hey {message.from_user.full_name}, these are your stats.
-
-📅 You went {session_result.all_days + days} days without relapsing
-⚡️ Your highest streak is {session_result.maximum_days} days
-💂 This is your {days_text} attempt
-🔥 Your current streak is {days} days long"""
+            get_stats_text(
+                name=message.from_user.full_name,
+                all_days=session_result.all_days + days,
+                highest=session_result.maximum_days,
+                attempt=days_text,
+                current=days,
+            )
         )
         await asyncio.sleep(20)
         await message_stats.delete()
@@ -233,7 +188,8 @@ async def stats_handler(message: Message) -> None:
 
 @router.message(Command(commands=["deleteAllDataAboutMe", "deletealldataaboutme"]))
 async def deleteAllDataAboutMe_handler(message: Message) -> None:
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == message.from_user.id)
         )
@@ -264,7 +220,8 @@ async def deleteAllDataAboutMe_handler(message: Message) -> None:
 
 @router.message(Command(commands=["relapse"]))
 async def relapse_handler(message: Message) -> None:
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == message.from_user.id)
         )
@@ -301,27 +258,16 @@ async def cancel_relapse(callback_query: CallbackQuery) -> None:
 
 @router.message(Command(commands=["help"]))
 async def help(message: Message) -> None:
-    message_to_reply = """/streak - 🍀 start a new streak
-/relapse - 🗑 relapse a streak
-/enableScoreboard - ✅  make your account show up on the scoreboard
-/setStreak <daysCount> - ⚙️ set a custom streak
-/stats - 📊 display some statistics 
-/check <id/username> - 🔧  deletes account from scoreboard if it's been deleted
-/deleteAllDataAboutMe - 🗑 Delete all data about yourself
-/removeFromLeaderboard <id/username> - 🗑 Remove user from leaderboard of this group (admin-only!)
-/returnToLeaderboard <id/username> - 🗑 Return user to leaderboard of this group, if it's banned (admin-only!)
-"""
+    message_to_reply = get_help_message()
     if SHOW_BASE_REPO_IN_HELP:
         message_to_reply += (
-            """\nIf you like this bot and want to support development, consider giving this project a star on GitHub:
-"""
+            "\nIf you like this bot and want to support development, consider giving this project a star on GitHub:\n"
             + BASE_REPO
         )
     await message.reply(
-        message_to_reply,
-        disable_web_page_preview=True,
-        parse_mode=None
+        message_to_reply, disable_web_page_preview=True, parse_mode=None
     )
+
 
 @router.message(Command(commands=["removeFromLeaderboard", "removefromleaderboard"]))
 async def check(message: Message, bot: Bot, command: CommandObject) -> None:
@@ -335,7 +281,8 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
         )
         return
     user_to_delete = command.args
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         if not user_to_delete.isnumeric():
             user_result = await session.scalar(
                 select(Users).where(Users.username == user_to_delete.strip("@"))
@@ -345,22 +292,36 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 return
             user_to_delete = user_result.user_id
         user_to_delete = int(user_to_delete)
-        user = await session.scalar(select(Groups).where(Groups.group_id == message.chat.id, Groups.user_id == user_to_delete))
+        user = await session.scalar(
+            select(Groups).where(
+                Groups.group_id == message.chat.id, Groups.user_id == user_to_delete
+            )
+        )
         user.is_banned = True
         try:
-            user_who_deletes = await bot.get_chat_member(message.chat.id, message.from_user.id)
+            user_who_deletes = await bot.get_chat_member(
+                message.chat.id, message.from_user.id
+            )
         except:
-            await message.reply("I can't get chat admins! Please report this error to the support group.")
+            await message.reply(
+                "I can't get chat admins! Please report this error to the support group."
+            )
             return
-        if not user_who_deletes.can_restrict_members and user_who_deletes.status != 'creator':
+        if (
+            not user_who_deletes.can_restrict_members
+            and user_who_deletes.status != "creator"
+        ):
             await message.reply(str(user_who_deletes))
-            await message.reply("This command is admin-only (with ability to restrict members)!")
+            await message.reply(
+                "This command is admin-only (with ability to restrict members)!"
+            )
             return
         session.add(user)
         await session.commit()
         await message.answer(
             f"Succesfully removed account with id {user_to_delete} from scoreboard of this group."
         )
+
 
 @router.message(Command(commands=["returnToLeaderboard", "returntoleaderboard"]))
 async def check(message: Message, bot: Bot, command: CommandObject) -> None:
@@ -374,7 +335,8 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
         )
         return
     user_to_delete = command.args
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         if not user_to_delete.isnumeric():
             user_result = await session.scalar(
                 select(Users).where(Users.username == user_to_delete.strip("@"))
@@ -384,16 +346,29 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 return
             user_to_delete = user_result.user_id
         user_to_delete = int(user_to_delete)
-        user = await session.scalar(select(Groups).where(Groups.group_id == message.chat.id, Groups.user_id == user_to_delete))
+        user = await session.scalar(
+            select(Groups).where(
+                Groups.group_id == message.chat.id, Groups.user_id == user_to_delete
+            )
+        )
         user.is_banned = False
         try:
-            user_who_deletes = await bot.get_chat_member(message.chat.id, message.from_user.id)
+            user_who_deletes = await bot.get_chat_member(
+                message.chat.id, message.from_user.id
+            )
         except:
-            await message.reply("I can't get chat admins! Please report this error to the support group.")
+            await message.reply(
+                "I can't get chat admins! Please report this error to the support group."
+            )
             return
-        if not user_who_deletes.can_restrict_members and user_who_deletes.status != 'creator':
+        if (
+            not user_who_deletes.can_restrict_members
+            and user_who_deletes.status != "creator"
+        ):
             await message.reply(str(user_who_deletes))
-            await message.reply("This command is admin-only (with ability to restrict members)!")
+            await message.reply(
+                "This command is admin-only (with ability to restrict members)!"
+            )
             return
         session.add(user)
         await session.commit()
@@ -411,7 +386,8 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
         )
         return
     user_to_delete = command.args
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         if not user_to_delete.isnumeric():
             user_result = await session.scalar(
                 select(Users).where(Users.username == user_to_delete.strip("@"))
@@ -456,7 +432,8 @@ async def register_a_relapse(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
         await callback_query.answer("🚫 This button was not meant for you")
         return
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == callback_query.from_user.id)
         )
@@ -470,13 +447,7 @@ async def register_a_relapse(callback_query: CallbackQuery) -> None:
         session.add(session_result)
         await session.commit()
         message_relapse = await callback_query.message.edit_text(
-            f"""🗑 Sad to see your streak of {days} days go down the drain.
-
-I started a new streak for you.
-
-🍀 Good luck, {callback_query.from_user.full_name}, you will need it.
-
-👉🏻 Check the <a href='https://easypeasymethod.org/'>easypeasy</a> method, it might help you.""",
+            get_relapse_message(days=days, name=callback_query.from_user.full_name),
             disable_web_page_preview=True,
         )
         await asyncio.sleep(10)
@@ -488,11 +459,12 @@ async def remove_all_data_logic(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
         await callback_query.answer("🚫 This button was not meant for you")
         return
-    async with async_session() as session:
-        deletion_result_users = await session.execute(
+    session: AsyncSession
+    async with di["async_session"]() as session:
+        await session.execute(
             delete(Users).where(Users.user_id == callback_query.from_user.id)
         )
-        deletion_result_groups = await session.execute(
+        await session.execute(
             delete(Groups).where(Groups.user_id == callback_query.from_user.id)
         )
         await session.commit()
@@ -502,15 +474,18 @@ async def remove_all_data_logic(callback_query: CallbackQuery) -> None:
 
 
 async def scoreboard(callback_query: CallbackQuery) -> None:
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users)
             .join(Groups, Users.user_id == Groups.user_id)
-            .filter(Groups.group_id == callback_query.message.chat.id, Groups.is_banned == False)
+            .filter(
+                Groups.group_id == callback_query.message.chat.id,
+                Groups.is_banned == False,
+            )
             .order_by(asc(Users.streak))
             .limit(50)
         )
-        old_message = ""
         message_result = "🏆 Scoreboard\n\n"
         for id, users_tuple in enumerate(session_result.all()):
             username = users_tuple[0].username
@@ -554,7 +529,8 @@ async def set_streak(message: Message) -> None:
     if not days.isnumeric() or int(days) > 100000:
         return
     days = int(days)
-    async with async_session() as session:
+    session: AsyncSession
+    async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users).where(Users.user_id == message.from_user.id)
         )

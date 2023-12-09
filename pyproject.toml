@@ -11,9 +11,11 @@ asyncpg = "0.27.0"
 python-dotenv = "1.0.0"
 SQLAlchemy = "2.0.7"
 alembic = "^1.13.0"
+kink = "^0.7.0"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 black = "^23.11.0"
+isort = "^5.12.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
