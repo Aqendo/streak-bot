@@ -9,7 +9,7 @@ Streak Telegram Bot
 - Convenient use
 - Admins can remove cheaters from leaderboard
 - Admins can return people to leaderboard
-- Users can delete all info about theirselfs
+- Users can delete all info about themselfs
 - PostgreSQL
 - Async
 - Docker support
