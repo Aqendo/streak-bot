@@ -63,16 +63,25 @@ async def create_all() -> None:
 
 dp.update.outer_middleware.register(update_users_info)
 
+async def delete_if_chat(message, msg_sent):
+    if message.chat.id != message.from_user.id:
+        await asyncio.sleep(20)
+        try:
+            await msg_sent.delete()
+        except:
+            pass
+
 
 @router.message(Command(commands=["start"]))
 async def command_start_handler(message: Message) -> None:
-    await message.answer(f"Hello, <b>{message.from_user.full_name}!</b>")
-
+    msg = await message.answer(f"Hello, <b>{message.from_user.full_name}!</b>. To start a streak, write /streak")
+    await delete_if_chat(message, msg)
 
 @router.message(Command(commands=["enablescoreboard", "enableScoreboard"]))
 async def enablescoreboard_handler(message: Message) -> None:
     if message.chat.id == message.from_user.id:
-        await message.reply("🚫 You can't enable scoreboards in private chat.")
+        msg = await message.reply("🚫 You can't enable scoreboards in private chat.")
+        await delete_if_chat(message, msg)
         return
     session: AsyncSession
     async with di["async_session"]() as session:
@@ -81,7 +90,8 @@ async def enablescoreboard_handler(message: Message) -> None:
         )
         session_result = session_result.scalar()
         if session_result is None:
-            await message.reply("↪️ Use /streak to start a new streak.")
+            msg = await message.reply("↪️ Use /streak to start a new streak.")
+            await delete_if_chat(message, msg)
             return
         session_result = await session.execute(
             select(Groups).where(
@@ -93,7 +103,7 @@ async def enablescoreboard_handler(message: Message) -> None:
         if session_result is None:
             session.add(Groups(user_id=message.from_user.id, group_id=message.chat.id))
             await session.commit()
-            await message.reply(
+            msg = await message.reply(
                 "✅ You are now appearing on the scoreboard.",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -107,7 +117,7 @@ async def enablescoreboard_handler(message: Message) -> None:
                 ),
             )
         else:
-            await message.reply(
+           msg = await message.reply(
                 "🚫 You already enabled scoreboards.",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -120,6 +130,7 @@ async def enablescoreboard_handler(message: Message) -> None:
                     ]
                 ),
             )
+    await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["streak"]))
@@ -143,14 +154,15 @@ async def register_handler(message: Message) -> None:
                 )
             )
             await session.commit()
-            await message.reply("Streak has been started! You have 0 days!")
+            msg = await message.reply("Streak has been started! You have 0 days!")
         else:
             days = (datetime.datetime.now() - session_result.streak).days
             days_str = "days" if days != 1 else "day"
-            await message.answer(
+            msg = await message.answer(
                 f"Hey {message.from_user.full_name}.\n🔥 Your streak is {days} {days_str} long.\n\n❌ Use /relapse if you have relapsed.",
                 parse_mode=None,
             )
+    await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["stats"]))
@@ -162,7 +174,8 @@ async def stats_handler(message: Message) -> None:
         )
         session_result = session_result.scalar()
         if session_result is None:
-            await message.reply("↪️ Use /streak to start a new streak.")
+            msg = await message.reply("↪️ Use /streak to start a new streak.")
+            await delete_if_chat(message, msg)
             return
         attempts = session_result.attempts
         days = (datetime.datetime.now() - session_result.streak).days
@@ -173,7 +186,7 @@ async def stats_handler(message: Message) -> None:
             if 4 <= attempts % 100 <= 20
             else {1: "st", 2: "nd", 3: "rd"}.get(attempts % 10, "th")
         )
-        message_stats = await message.reply(
+        msg = await message.reply(
             get_stats_text(
                 name=message.from_user.full_name,
                 all_days=session_result.all_days + days,
@@ -182,8 +195,7 @@ async def stats_handler(message: Message) -> None:
                 current=days,
             )
         )
-        await asyncio.sleep(20)
-        await message_stats.delete()
+        await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["deleteAllDataAboutMe", "deletealldataaboutme"]))
@@ -195,11 +207,12 @@ async def deleteAllDataAboutMe_handler(message: Message) -> None:
         )
         session_result = session_result.scalar()
         if session_result is None:
-            await message.reply(
+            msg = await message.reply(
                 "I don't have any info about you at the moment. You can register a streak with /streak command."
             )
+            await delete_if_chat(message, msg)
             return
-        await message.reply(
+        msg = await message.reply(
             "Are you sure you want to delete <b>ALL</b> data about yourself? This is <b>IRREVERSIBLE</b> and no one on the entire planet Earth will be able to restore your streaks!",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -216,6 +229,7 @@ async def deleteAllDataAboutMe_handler(message: Message) -> None:
                 ]
             ),
         )
+        await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["relapse"]))
@@ -227,9 +241,10 @@ async def relapse_handler(message: Message) -> None:
         )
         session_result = session_result.scalar()
         if session_result is None:
-            await message.reply("To start a streak, write /streak")
+            msg = await message.reply("To start a streak, write /streak")
+            await delete_if_chat(message, msg)
             return
-        await message.reply(
+        msg = await message.reply(
             "Are you sure you want to register a <b>relapse</b>?",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -246,6 +261,7 @@ async def relapse_handler(message: Message) -> None:
                 ]
             ),
         )
+        await delete_if_chat(message, msg)
 
 
 @router.callback_query(F.data.startswith("cancel_"))
@@ -253,7 +269,8 @@ async def cancel_relapse(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
         await callback_query.answer("🚫 This button was not meant for you")
         return
-    await callback_query.message.edit_text("🆗 Cancelled.")
+    msg = await callback_query.message.edit_text("🆗 Cancelled.")
+    await delete_if_chat(callback_query, msg)
 
 
 @router.message(Command(commands=["help"]))
@@ -264,21 +281,24 @@ async def help(message: Message) -> None:
             "\nIf you like this bot and want to support development, consider giving this project a star on GitHub:\n"
             + BASE_REPO
         )
-    await message.reply(
+    msg = await message.reply(
         message_to_reply, disable_web_page_preview=True, parse_mode=None
     )
+    await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["removeFromLeaderboard", "removefromleaderboard"]))
 async def check(message: Message, bot: Bot, command: CommandObject) -> None:
     if message.chat.id == message.from_user.id:
-        await message.reply("❌ This command works only in groups.")
+        msg = await message.reply("❌ This command works only in groups.")
+        await delete_if_chat(message, msg)
         return
     if not command.args:
-        await message.reply(
+        msg = await message.reply(
             "❌ Not enough arguments\.\n**USAGE**:\n`/removeFromLeaderboard \<\+id/\+username\>`\n\n_Deletes an account from scoreboard \(admins only\)_",
             parse_mode="MarkdownV2",
         )
+        await delete_if_chat(message, msg)
         return
     user_to_delete = command.args
     session: AsyncSession
@@ -288,7 +308,8 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 select(Users).where(Users.username == user_to_delete.strip("@"))
             )
             if not user_result:
-                await message.reply("This user never used me")
+                msg = await message.reply("This user never used me")
+                await delete_if_chat(message, msg)
                 return
             user_to_delete = user_result.user_id
         user_to_delete = int(user_to_delete)
@@ -303,24 +324,26 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 message.chat.id, message.from_user.id
             )
         except:
-            await message.reply(
+            msg = await message.reply(
                 "I can't get chat admins! Please report this error to the support group."
             )
+            await delete_if_chat(message, msg)
             return
         if (
             not user_who_deletes.can_restrict_members
             and user_who_deletes.status != "creator"
         ):
-            await message.reply(str(user_who_deletes))
-            await message.reply(
+            msg = await message.reply(
                 "This command is admin-only (with ability to restrict members)!"
             )
+            await delete_if_chat(message, msg)
             return
         session.add(user)
         await session.commit()
-        await message.answer(
+        msg = await message.answer(
             f"Succesfully removed account with id {user_to_delete} from scoreboard of this group."
         )
+        await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["returnToLeaderboard", "returntoleaderboard"]))
@@ -329,10 +352,11 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
         await message.reply("❌ This command works only in groups.")
         return
     if not command.args:
-        await message.reply(
+        msg = await message.reply(
             "❌ Not enough arguments\.\n**USAGE**:\n`/returnToLeaderboard \<\+id/\+username\>`\n\Returns an account to scoreboard if it's banned \(admins only\)_",
             parse_mode="MarkdownV2",
         )
+        await delete_if_chat(message, msg)
         return
     user_to_delete = command.args
     session: AsyncSession
@@ -342,7 +366,8 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 select(Users).where(Users.username == user_to_delete.strip("@"))
             )
             if not user_result:
-                await message.reply("This user never used me")
+                msg = await message.reply("This user never used me")
+                await delete_if_chat(message, msg)
                 return
             user_to_delete = user_result.user_id
         user_to_delete = int(user_to_delete)
@@ -357,33 +382,36 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 message.chat.id, message.from_user.id
             )
         except:
-            await message.reply(
+            msg = await message.reply(
                 "I can't get chat admins! Please report this error to the support group."
             )
+            await delete_if_chat(message, msg)
             return
         if (
             not user_who_deletes.can_restrict_members
             and user_who_deletes.status != "creator"
         ):
-            await message.reply(str(user_who_deletes))
-            await message.reply(
+            msg = await message.reply(
                 "This command is admin-only (with ability to restrict members)!"
             )
+            await delete_if_chat(message, msg)
             return
         session.add(user)
         await session.commit()
-        await message.answer(
+        msg = await message.answer(
             f"Succesfully returned an account with id {user_to_delete} to scoreboard of this group."
         )
+        await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["check"]))
 async def check(message: Message, bot: Bot, command: CommandObject) -> None:
     if not command.args:
-        await message.reply(
+        msg = await message.reply(
             "❌ Not enough arguments\.\n**USAGE**:\n`/check \<\+id/\+username\>`\n\n_Deletes an account from scoreboard if it's been deleted_",
             parse_mode="MarkdownV2",
         )
+        await delete_if_chat(message, msg)
         return
     user_to_delete = command.args
     session: AsyncSession
@@ -393,7 +421,8 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 select(Users).where(Users.username == user_to_delete.strip("@"))
             )
             if not user_result:
-                await message.reply("This user never used me")
+                msg = await message.reply("This user never used me")
+                await delete_if_chat(message, msg)
                 return
             user_to_delete = user_result.user_id
         else:
@@ -401,30 +430,34 @@ async def check(message: Message, bot: Bot, command: CommandObject) -> None:
                 select(Users).where(Users.user_id == int(user_to_delete))
             )
             if not user_result:
-                await message.reply("This user never used me")
+                msg =await message.reply("This user never used me")
+                await delete_if_chat(message, msg)
                 return
             user_to_delete = int(user_to_delete)
         member = None
         try:
             member = await bot.get_chat_member(message.chat.id, user_to_delete)
         except:
-            await message.reply(
+            msg = await message.reply(
                 "Query failed. If you sure you entered right ID, then wait some time to Telegram to wake up from maintenance or something."
             )
+            await delete_if_chat(message, msg)
             return
         if not member:
             return
         if member.user.first_name != "" and member.user.first_name != "Deleted Account":
-            await message.reply(
+            msg = await message.reply(
                 "This user is alive and hasn't deleted his account yet."
             )
+            await delete_if_chat(message, msg)
             return
         await session.delete(user_result)
         await session.execute(delete(Groups).where(Groups.user_id == user_to_delete))
         await session.commit()
-        await message.answer(
+        msg = await message.answer(
             f"Succesfully removed account with id {user_to_delete} from my database."
         )
+        await delete_if_chat(message, msg)
 
 
 @router.callback_query(F.data.startswith("relapse_"))
@@ -446,12 +479,11 @@ async def register_a_relapse(callback_query: CallbackQuery) -> None:
         session_result.attempts += 1
         session.add(session_result)
         await session.commit()
-        message_relapse = await callback_query.message.edit_text(
+        msg = await callback_query.message.edit_text(
             get_relapse_message(days=days, name=callback_query.from_user.full_name),
             disable_web_page_preview=True,
         )
-        await asyncio.sleep(10)
-        await message_relapse.delete()
+        await delete_if_chat(callback_query, msg)
 
 
 @router.callback_query(F.data.startswith("remove_"))
@@ -468,9 +500,10 @@ async def remove_all_data_logic(callback_query: CallbackQuery) -> None:
             delete(Groups).where(Groups.user_id == callback_query.from_user.id)
         )
         await session.commit()
-        await callback_query.message.edit_text(
+        msg = await callback_query.message.edit_text(
             f"""🗑 From now I know nothing about you! All your data was erased forever. If you want to start again, just use /streak command.""",
         )
+        await delete_if_chat(callback_query, msg)
 
 
 async def scoreboard(callback_query: CallbackQuery) -> None:
@@ -507,7 +540,7 @@ async def scoreboard(callback_query: CallbackQuery) -> None:
                 "days" if days != 1 else "day",
             )
         try:
-            await callback_query.message.edit_text(message_result)
+            await callback_query.message.edit_text(message_result)            
         except aiogram.exceptions.TelegramBadRequest:
             return
 
@@ -536,12 +569,14 @@ async def set_streak(message: Message) -> None:
         )
         session_result = session_result.scalar()
     if session_result is None:
-        await message.answer("↪️ Use /streak to start a new streak.")
+        msg = await message.answer("↪️ Use /streak to start a new streak.")
+        await delete_if_chat(message, msg)
         return
     session_result.streak = datetime.datetime.now() - datetime.timedelta(days=days)
     session.add(session_result)
     await session.commit()
-    await message.answer("Done")
+    msg = await message.answer("Done")
+    await delete_if_chat(message, msg)
 
 
 async def main() -> None:

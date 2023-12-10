@@ -3,11 +3,11 @@ def get_stats_text(
 ) -> str:
     return f"""Hey {name}, these are your stats.
 
-  📅 You went {all_days} days without relapsing
-  ⚡️ Your highest streak is {highest} days
-  💂 This is your {attempt} attempt
-  🔥 Your current streak is {current} days long
-  """
+📅 You went {all_days} days without relapsing
+⚡️ Your highest streak is {highest} days
+💂 This is your {attempt} attempt
+🔥 Your current streak is {current} days long
+"""
 
 
 def get_help_message() -> str:
