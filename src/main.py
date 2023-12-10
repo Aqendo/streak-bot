@@ -269,8 +269,7 @@ async def cancel_relapse(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
         await callback_query.answer("🚫 This button was not meant for you")
         return
-    msg = await callback_query.message.edit_text("🆗 Cancelled.")
-    await delete_if_chat(callback_query, msg)
+    await callback_query.message.edit_text("🆗 Cancelled.")
 
 
 @router.message(Command(commands=["help"]))
@@ -479,11 +478,10 @@ async def register_a_relapse(callback_query: CallbackQuery) -> None:
         session_result.attempts += 1
         session.add(session_result)
         await session.commit()
-        msg = await callback_query.message.edit_text(
+        await callback_query.message.edit_text(
             get_relapse_message(days=days, name=callback_query.from_user.full_name),
             disable_web_page_preview=True,
         )
-        await delete_if_chat(callback_query, msg)
 
 
 @router.callback_query(F.data.startswith("remove_"))
@@ -500,10 +498,9 @@ async def remove_all_data_logic(callback_query: CallbackQuery) -> None:
             delete(Groups).where(Groups.user_id == callback_query.from_user.id)
         )
         await session.commit()
-        msg = await callback_query.message.edit_text(
+        await callback_query.message.edit_text(
             f"""🗑 From now I know nothing about you! All your data was erased forever. If you want to start again, just use /streak command.""",
         )
-        await delete_if_chat(callback_query, msg)
 
 
 async def scoreboard(callback_query: CallbackQuery) -> None:
