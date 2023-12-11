@@ -130,7 +130,6 @@ async def enablescoreboard_handler(message: Message) -> None:
                     ]
                 ),
             )
-    await delete_if_chat(message, msg)
 
 
 @router.message(Command(commands=["streak"]))
