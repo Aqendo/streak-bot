@@ -8,13 +8,19 @@ class Base(DeclarativeBase):
     pass
 
 
-class Groups(Base):
-    __tablename__ = "groups"
+class Group(Base):
+    __tablename__ = "group"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(BigInteger(), nullable=False)
+    autodelete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class GroupUser(Base):
+    __tablename__ = "group_user"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger())
     group_id: Mapped[int] = mapped_column(BigInteger())
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
-    autodelete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 class Users(Base):
     __tablename__ = "users"

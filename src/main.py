@@ -37,7 +37,7 @@ from consts import (
 from helpers import check_admins
 from messages import get_help_message, get_relapse_message, get_stats_text
 from middlewares.update_usernames import update_users_info
-from models.database import Groups, Users
+from models.database import GroupUser, Group, Users
 
 load_dotenv(find_dotenv())
 
@@ -60,7 +60,9 @@ async def create_all() -> None:
     conn: AsyncConnection
     async with di["engine"].begin() as conn:
         await conn.run_sync(Users.metadata.create_all)
-        await conn.run_sync(Groups.metadata.create_all)
+        await conn.run_sync(Group.metadata.create_all)
+        await conn.run_sync(GroupUser.metadata.create_all)
+        
 
 
 dp.update.outer_middleware.register(update_users_info)
@@ -95,13 +97,13 @@ async def enablescoreboard_handler(message: Message, autodelete: bool) -> None:
             await delete_if_chat(autodelete, message, msg)
             return
         session_result = await session.scalar(
-            select(Groups).where(
-                Groups.user_id == message.from_user.id,
-                Groups.group_id == message.chat.id,
+            select(GroupUser).where(
+                GroupUser.user_id == message.from_user.id,
+                GroupUser.group_id == message.chat.id,
             )
         )
         if session_result is None:
-            session.add(Groups(user_id=message.from_user.id, group_id=message.chat.id))
+            session.add(GroupUser(user_id=message.from_user.id, group_id=message.chat.id))
             await session.commit()
             msg = await message.reply(
                 f"{Emoji.TICK} You are now appearing on the scoreboard.",
@@ -144,7 +146,7 @@ async def register_handler(message: Message, autodelete: bool) -> None:
                 Users(
                     user_id=message.from_user.id,
                     name=message.from_user.full_name,
-                    username=message.autodeletefrom_user.username,
+                    username=message.from_user.username,
                     streak=datetime.datetime.now(),
                     attempts=1,
                     maximum_days=0,
@@ -308,12 +310,13 @@ async def check(message: Message, bot: Bot, command: CommandObject, autodelete: 
             user_to_delete = user_result.user_id
         user_to_delete = int(user_to_delete)
         user = await session.scalar(
-            select(Groups).where(
-                Groups.group_id == message.chat.id, Groups.user_id == user_to_delete
+            select(GroupUser).where(
+                GroupUser.group_id == message.chat.id, GroupUser.user_id == user_to_delete
             )
         )
         user.is_banned = True
-        await check_admins(message, bot, delete_if_chat)
+        is_admin = await check_admins(message, bot, delete_if_chat)
+        if not is_admin: return
         session.add(user)
         await session.commit()
         msg = await message.answer(
@@ -329,15 +332,16 @@ async def autodelete_handler(message: Message, bot: Bot, command: Command, autod
         return
     if not isinstance(command.args, str) or not command.args or command.args.lower() not in ["on", "off"]:
         msg = await message.reply(
-            f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/autodelete \<on\/off>`\n\Enables or disabled autodeleting messages in groups \(admins only\)_",
+            f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/autodelete \<on\/off\>`\n_Enables or disabled autodeleting messages in groups \(admins only\)_",
             parse_mode="MarkdownV2",
         )
         await delete_if_chat(autodelete, message, msg)
         return
-    await check_admins(message, bot, delete_if_chat)
+    is_admin = await check_admins(message, bot, delete_if_chat, matter_if_admin_can_delete_user=False)
+    if not is_admin: return
     session: AsyncSession
     async with di["async_session"]() as session:
-        group = await session.scalar(select(Groups).where(Groups.group_id == message.chat.id))
+        group = await session.scalar(select(Group).where(Group.group_id == message.chat.id))
         if command.args.lower() == "on":
             group.autodelete = True
         elif command.args.lower() == "off":
@@ -359,7 +363,7 @@ async def returntoleaderboard(message: Message, bot: Bot, command: CommandObject
         return
     if not command.args:
         msg = await message.reply(
-            f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/returnToLeaderboard \<\+id/\+username\>`\n\Returns an account to scoreboard if it's banned \(admins only\)_",
+            f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/returnToLeaderboard \<\+id/\+username\>`\n_Returns an account to scoreboard if it's banned \(admins only\)_",
             parse_mode="MarkdownV2",
         )
         await delete_if_chat(autodelete, message, msg)
@@ -378,12 +382,13 @@ async def returntoleaderboard(message: Message, bot: Bot, command: CommandObject
             user_to_delete = user_result.user_id
         user_to_delete = int(user_to_delete)
         user = await session.scalar(
-            select(Groups).where(
-                Groups.group_id == message.chat.id, Groups.user_id == user_to_delete
+            select(GroupUser).where(
+                GroupUser.group_id == message.chat.id, GroupUser.user_id == user_to_delete
             )
         )
         user.is_banned = False
-        await check_admins(message, bot, delete_if_chat)
+        is_admin = await check_admins(message, bot, delete_if_chat)
+        if not is_admin: return
         session.add(user)
         await session.commit()
         msg = await message.answer(
@@ -440,7 +445,7 @@ async def check(message: Message, bot: Bot, command: CommandObject, autodelete: 
             await delete_if_chat(autodelete, message, msg)
             return
         await session.delete(user_result)
-        await session.execute(delete(Groups).where(Groups.user_id == user_to_delete))
+        await session.execute(delete(GroupUser).where(GroupUser.user_id == user_to_delete))
         await session.commit()
         msg = await message.answer(
             f"Succesfully removed account with id {user_to_delete} from my database."
@@ -483,7 +488,7 @@ async def remove_all_data_logic(callback_query: CallbackQuery, autodelete: bool)
             delete(Users).where(Users.user_id == callback_query.from_user.id)
         )
         await session.execute(
-            delete(Groups).where(Groups.user_id == callback_query.from_user.id)
+            delete(GroupUser).where(GroupUser.user_id == callback_query.from_user.id)
         )
         await session.commit()
         await callback_query.message.edit_text(
@@ -496,10 +501,10 @@ async def scoreboard(callback_query: CallbackQuery) -> None:
     async with di["async_session"]() as session:
         session_result = await session.execute(
             select(Users)
-            .join(Groups, Users.user_id == Groups.user_id)
+            .join(GroupUser, Users.user_id == GroupUser.user_id)
             .filter(
-                Groups.group_id == callback_query.message.chat.id,
-                Groups.is_banned == False,
+                GroupUser.group_id == callback_query.message.chat.id,
+                GroupUser.is_banned == False,
             )
             .order_by(asc(Users.streak))
             .limit(50)
