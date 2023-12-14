@@ -14,7 +14,8 @@ async def update_users_info(
     data: Dict[str, Any],
 ) -> Any:
     event_old = event
-    event = event.callback_query or event.message
+    if not event.callback_query and not event.message: return await handler(event_old, data)
+    event = event.callback_query.message or event.message
     if event is None:
         return
     session: AsyncSession
