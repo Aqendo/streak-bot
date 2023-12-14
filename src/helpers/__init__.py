@@ -14,7 +14,7 @@ async def check_admins(message: Message, bot: Bot, delete_if_chat, matter_if_adm
         return False
     if (
         (matter_if_admin_can_delete_user and not user_who_deletes.can_restrict_members)
-        and user_who_deletes.status != "creator"
+        and not (user_who_deletes.status != "administrator" or user_who_deletes.status != "creator")
     ):
         msg = await message.reply(
             "This command is admin-only (with ability to restrict members)!"
