@@ -1,3 +1,4 @@
+from enum import Enum
 import os
 
 from dotenv import find_dotenv, load_dotenv
@@ -14,3 +15,14 @@ BASE_REPO = os.getenv("BASE_REPO") or "https://github.com/Aqendo/streak-bot"
 SHOW_BASE_REPO_IN_HELP = (
     True if os.getenv("SHOW_BASE_REPO_IN_HELP") == "true" else False
 )
+
+
+class Emoji:
+    TICK = "✅"
+    CROSS = "❌"
+    FIRE = "🔥"
+    FORBIDDEN = "🚫"
+    BIN = "🗑"
+    TROPHY = "🏆"
+    OK = "🆗"
+    ARROW_RIGHT = "↪️"

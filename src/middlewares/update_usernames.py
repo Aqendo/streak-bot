@@ -5,7 +5,7 @@ from kink import di
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database import Users
+from models.database import Users, Groups
 
 
 async def update_users_info(
@@ -19,16 +19,21 @@ async def update_users_info(
         return
     session: AsyncSession
     async with di["async_session"]() as session:
-        session_result = await session.execute(
+        user = await session.scalar(
             select(Users).where(Users.user_id == event.from_user.id)
         )
-        session_result = session_result.scalar()
-        if session_result is not None and (
-            session_result.name != event.from_user.full_name
-            or session_result.username != event.from_user.username
+        if user is not None and (
+            user.name != event.from_user.full_name
+            or user.username != event.from_user.username
         ):
-            session_result.name = event.from_user.full_name
-            session_result.username = event.from_user.username
-            session.add(session_result)
+            user.name = event.from_user.full_name
+            user.username = event.from_user.username
+            session.add(user)
             await session.commit()
+        if event.chat.id != event.from_user.id:
+            group = await session.scalar(select(Groups).where(Groups.group_id == event.chat.id))
+            if group:
+                data["autodelete"] = group.autodelete
+        else:
+            data["autodelete"] = False
     return await handler(event_old, data)

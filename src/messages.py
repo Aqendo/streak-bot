@@ -17,9 +17,10 @@ def get_help_message() -> str:
 /setStreak <daysCount> - ⚙️ set a custom streak
 /stats - 📊 display some statistics 
 /check <id/username> - 🔧  deletes account from scoreboard if it's been deleted
-/deleteAllDataAboutMe - 🗑 Delete all data about yourself
-/removeFromLeaderboard <id/username> - 🗑 Remove user from leaderboard of this group (admin-only!)
-/returnToLeaderboard <id/username> - 🗑 Return user to leaderboard of this group, if it's banned (admin-only!)
+/deleteAllDataAboutMe - 🗑 delete all data about yourself
+/removeFromLeaderboard <id/username> - 🗑 remove user from leaderboard of this group (admin-only!)
+/returnToLeaderboard <id/username> - 🗑 return user to leaderboard of this group, if it's banned (admin-only!)
+/autodelete <on/off> - 🔧 enables or disabled autodeleting messages in groups (admin-only!)
 """
 
 
