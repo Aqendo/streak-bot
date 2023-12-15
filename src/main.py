@@ -478,7 +478,7 @@ async def register_a_relapse(callback_query: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("remove_"))
-async def remove_all_data_logic(callback_query: CallbackQuery, autodelete: bool) -> None:
+async def remove_all_data_logic(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
         await callback_query.answer(f"{Emoji.FORBIDDEN} This button was not meant for you")
         return
