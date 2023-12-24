@@ -32,7 +32,7 @@ from consts import (
     SQLALCHEMY_ECHO,
     TIMEOUT_SCOREBOARD_IN_SECONDS,
     TOKEN,
-    Emoji
+    Emoji,
 )
 from helpers import check_admins
 from messages import get_help_message, get_relapse_message, get_stats_text
@@ -40,7 +40,6 @@ from middlewares.update_usernames import update_users_info
 from models.database import GroupUser, Group, Users
 
 load_dotenv(find_dotenv())
-
 
 di["engine"] = create_async_engine(
     f"postgresql+asyncpg://{POSTGRES_LOGIN}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}/{POSTGRES_DB}",
@@ -62,10 +61,10 @@ async def create_all() -> None:
         await conn.run_sync(Users.metadata.create_all)
         await conn.run_sync(Group.metadata.create_all)
         await conn.run_sync(GroupUser.metadata.create_all)
-        
 
 
 dp.update.outer_middleware.register(update_users_info)
+
 
 async def delete_if_chat(autodelete, message, msg_sent):
     if message.chat.id != message.from_user.id and autodelete:
@@ -78,13 +77,18 @@ async def delete_if_chat(autodelete, message, msg_sent):
 
 @router.message(Command(commands=["start"]))
 async def command_start_handler(message: Message, autodelete: bool) -> None:
-    msg = await message.answer(f"Hello, <b>{message.from_user.full_name}!</b>. To start a streak, write /streak")
+    msg = await message.answer(
+        f"Hello, <b>{message.from_user.full_name}!</b>. To start a streak, write /streak"
+    )
     await delete_if_chat(autodelete, message, msg)
+
 
 @router.message(Command(commands=["enablescoreboard", "enableScoreboard"]))
 async def enablescoreboard_handler(message: Message, autodelete: bool) -> None:
     if message.chat.id == message.from_user.id:
-        msg = await message.reply(f"{Emoji.FORBIDDEN} You can't enable scoreboards in private chat.")
+        msg = await message.reply(
+            f"{Emoji.FORBIDDEN} You can't enable scoreboards in private chat."
+        )
         await delete_if_chat(autodelete, message, msg)
         return
     session: AsyncSession
@@ -93,7 +97,9 @@ async def enablescoreboard_handler(message: Message, autodelete: bool) -> None:
             select(Users).where(Users.user_id == message.from_user.id)
         )
         if session_result is None:
-            msg = await message.reply(f"{Emoji.ARROW_RIGHT} Use /streak to start a new streak.")
+            msg = await message.reply(
+                f"{Emoji.ARROW_RIGHT} Use /streak to start a new streak."
+            )
             await delete_if_chat(autodelete, message, msg)
             return
         session_result = await session.scalar(
@@ -103,7 +109,9 @@ async def enablescoreboard_handler(message: Message, autodelete: bool) -> None:
             )
         )
         if session_result is None:
-            session.add(GroupUser(user_id=message.from_user.id, group_id=message.chat.id))
+            session.add(
+                GroupUser(user_id=message.from_user.id, group_id=message.chat.id)
+            )
             await session.commit()
             msg = await message.reply(
                 f"{Emoji.TICK} You are now appearing on the scoreboard.",
@@ -119,7 +127,7 @@ async def enablescoreboard_handler(message: Message, autodelete: bool) -> None:
                 ),
             )
         else:
-           msg = await message.reply(
+            msg = await message.reply(
                 f"{Emoji.FORBIDDEN} You already enabled scoreboards.",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -264,7 +272,9 @@ async def relapse_handler(message: Message, autodelete: bool) -> None:
 @router.callback_query(F.data.startswith("cancel_"))
 async def cancel_relapse(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
-        await callback_query.answer(f"{Emoji.FORBIDDEN} This button was not meant for you")
+        await callback_query.answer(
+            f"{Emoji.FORBIDDEN} This button was not meant for you"
+        )
         return
     await callback_query.message.edit_text(f"{Emoji.OK} Cancelled.")
 
@@ -284,7 +294,9 @@ async def help(message: Message, autodelete: bool) -> None:
 
 
 @router.message(Command(commands=["removeFromLeaderboard", "removefromleaderboard"]))
-async def check(message: Message, bot: Bot, command: CommandObject, autodelete: bool) -> None:
+async def check(
+    message: Message, bot: Bot, command: CommandObject, autodelete: bool
+) -> None:
     if message.chat.id == message.from_user.id:
         msg = await message.reply(f"{Emoji.CROSS} This command works only in groups.")
         await delete_if_chat(autodelete, message, msg)
@@ -311,12 +323,14 @@ async def check(message: Message, bot: Bot, command: CommandObject, autodelete: 
         user_to_delete = int(user_to_delete)
         user = await session.scalar(
             select(GroupUser).where(
-                GroupUser.group_id == message.chat.id, GroupUser.user_id == user_to_delete
+                GroupUser.group_id == message.chat.id,
+                GroupUser.user_id == user_to_delete,
             )
         )
         user.is_banned = True
         is_admin = await check_admins(message, bot, delete_if_chat)
-        if not is_admin: return
+        if not is_admin:
+            return
         session.add(user)
         await session.commit()
         msg = await message.answer(
@@ -326,38 +340,53 @@ async def check(message: Message, bot: Bot, command: CommandObject, autodelete: 
 
 
 @router.message(Command(commands=["autodelete"]))
-async def autodelete_handler(message: Message, bot: Bot, command: Command, autodelete: bool):
+async def autodelete_handler(
+    message: Message, bot: Bot, command: Command, autodelete: bool
+):
     if message.chat.id == message.from_user.id:
         await message.reply(f"{Emoji.CROSS} This command works only in groups.")
         return
-    if not isinstance(command.args, str) or not command.args or command.args.lower() not in ["on", "off"]:
+    if (
+        not isinstance(command.args, str)
+        or not command.args
+        or command.args.lower() not in ["on", "off"]
+    ):
         msg = await message.reply(
             f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/autodelete \<on\/off\>`\n_Enables or disabled autodeleting messages in groups \(admins only\)_",
             parse_mode="MarkdownV2",
         )
         await delete_if_chat(autodelete, message, msg)
         return
-    is_admin = await check_admins(message, bot, delete_if_chat, matter_if_admin_can_delete_user=False)
-    if not is_admin: return
+    is_admin = await check_admins(
+        message, bot, delete_if_chat, matter_if_admin_can_delete_user=False
+    )
+    if not is_admin:
+        return
     session: AsyncSession
     async with di["async_session"]() as session:
-        group = await session.scalar(select(Group).where(Group.group_id == message.chat.id))
+        group = await session.scalar(
+            select(Group).where(Group.group_id == message.chat.id)
+        )
         if command.args.lower() == "on":
             group.autodelete = True
         elif command.args.lower() == "off":
             group.autodelete = False
         else:
-            await message.reply("For some reason bot handled /autodelete with wrong parameter. Report this.")
+            await message.reply(
+                "For some reason bot handled /autodelete with wrong parameter. Report this."
+            )
             return
         session.add(group)
         await session.commit()
-    await message.answer("Successfully turned autodeleting messages " + command.args.lower())
-        
-        
+    await message.answer(
+        "Successfully turned autodeleting messages " + command.args.lower()
+    )
 
 
 @router.message(Command(commands=["returnToLeaderboard", "returntoleaderboard"]))
-async def returntoleaderboard(message: Message, bot: Bot, command: CommandObject, autodelete: bool) -> None:
+async def returntoleaderboard(
+    message: Message, bot: Bot, command: CommandObject, autodelete: bool
+) -> None:
     if message.chat.id == message.from_user.id:
         await message.reply(f"{Emoji.CROSS} This command works only in groups.")
         return
@@ -383,12 +412,14 @@ async def returntoleaderboard(message: Message, bot: Bot, command: CommandObject
         user_to_delete = int(user_to_delete)
         user = await session.scalar(
             select(GroupUser).where(
-                GroupUser.group_id == message.chat.id, GroupUser.user_id == user_to_delete
+                GroupUser.group_id == message.chat.id,
+                GroupUser.user_id == user_to_delete,
             )
         )
         user.is_banned = False
         is_admin = await check_admins(message, bot, delete_if_chat)
-        if not is_admin: return
+        if not is_admin:
+            return
         session.add(user)
         await session.commit()
         msg = await message.answer(
@@ -398,7 +429,9 @@ async def returntoleaderboard(message: Message, bot: Bot, command: CommandObject
 
 
 @router.message(Command(commands=["check"]))
-async def check(message: Message, bot: Bot, command: CommandObject, autodelete: bool) -> None:
+async def check(
+    message: Message, bot: Bot, command: CommandObject, autodelete: bool
+) -> None:
     if not command.args:
         msg = await message.reply(
             f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/check \<\+id/\+username\>`\n\n_Deletes an account from scoreboard if it's been deleted_",
@@ -423,7 +456,7 @@ async def check(message: Message, bot: Bot, command: CommandObject, autodelete: 
                 select(Users).where(Users.user_id == int(user_to_delete))
             )
             if not user_result:
-                msg =await message.reply("This user never used me")
+                msg = await message.reply("This user never used me")
                 await delete_if_chat(autodelete, message, msg)
                 return
             user_to_delete = int(user_to_delete)
@@ -445,7 +478,9 @@ async def check(message: Message, bot: Bot, command: CommandObject, autodelete: 
             await delete_if_chat(autodelete, message, msg)
             return
         await session.delete(user_result)
-        await session.execute(delete(GroupUser).where(GroupUser.user_id == user_to_delete))
+        await session.execute(
+            delete(GroupUser).where(GroupUser.user_id == user_to_delete)
+        )
         await session.commit()
         msg = await message.answer(
             f"Succesfully removed account with id {user_to_delete} from my database."
@@ -456,7 +491,9 @@ async def check(message: Message, bot: Bot, command: CommandObject, autodelete: 
 @router.callback_query(F.data.startswith("relapse_"))
 async def register_a_relapse(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
-        await callback_query.answer(f"{Emoji.FORBIDDEN} This button was not meant for you")
+        await callback_query.answer(
+            f"{Emoji.FORBIDDEN} This button was not meant for you"
+        )
         return
     session: AsyncSession
     async with di["async_session"]() as session:
@@ -480,7 +517,9 @@ async def register_a_relapse(callback_query: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("remove_"))
 async def remove_all_data_logic(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
-        await callback_query.answer(f"{Emoji.FORBIDDEN} This button was not meant for you")
+        await callback_query.answer(
+            f"{Emoji.FORBIDDEN} This button was not meant for you"
+        )
         return
     session: AsyncSession
     async with di["async_session"]() as session:
@@ -530,7 +569,7 @@ async def scoreboard(callback_query: CallbackQuery) -> None:
                 "days" if days != 1 else "day",
             )
         try:
-            await callback_query.message.edit_text(message_result)            
+            await callback_query.message.edit_text(message_result)
         except aiogram.exceptions.TelegramBadRequest:
             return
 
@@ -538,7 +577,9 @@ async def scoreboard(callback_query: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("turn_"))
 async def turn_scoreboard(callback_query: CallbackQuery) -> None:
     if callback_query.from_user.id != int(callback_query.data.split("_", 1)[1]):
-        await callback_query.answer(f"{Emoji.FORBIDDEN} This button was not meant for you")
+        await callback_query.answer(
+            f"{Emoji.FORBIDDEN} This button was not meant for you"
+        )
         return
     scoreboards[callback_query.chat_instance] = callback_query.message
     while scoreboards[callback_query.chat_instance] == callback_query.message:

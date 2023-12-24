@@ -19,7 +19,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("groups", sa.Column("is_banned", sa.Boolean, default=False, nullable=False, server_default=sa.text("FALSE")))
+    op.add_column(
+        "groups",
+        sa.Column(
+            "is_banned",
+            sa.Boolean,
+            default=False,
+            nullable=False,
+            server_default=sa.text("FALSE"),
+        ),
+    )
 
 
 def downgrade() -> None:

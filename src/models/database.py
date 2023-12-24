@@ -22,6 +22,7 @@ class GroupUser(Base):
     group_id: Mapped[int] = mapped_column(BigInteger())
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
+
 class Users(Base):
     __tablename__ = "users"
 

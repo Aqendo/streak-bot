@@ -14,8 +14,9 @@ async def update_users_info(
     data: Dict[str, Any],
 ) -> Any:
     event_old = event
-    if not event.message: return await handler(event_old, data)
-    event = event.message 
+    if not event.message:
+        return await handler(event_old, data)
+    event = event.message
     session: AsyncSession
     async with di["async_session"]() as session:
         user = await session.scalar(
@@ -30,11 +31,13 @@ async def update_users_info(
             session.add(user)
             await session.commit()
         if event.chat.id != event.from_user.id:
-            group = await session.scalar(select(Group).where(Group.group_id == event.chat.id))
+            group = await session.scalar(
+                select(Group).where(Group.group_id == event.chat.id)
+            )
             if not group:
                 session.add(Group(group_id=event.chat.id))
                 await session.commit()
-                data["autodelete"] = False            
+                data["autodelete"] = False
             else:
                 data["autodelete"] = group.autodelete
         else:
