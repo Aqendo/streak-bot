@@ -8,9 +8,9 @@ ENV PYTHONFAULTHANDLER=1 \
 
 RUN pip install poetry
 WORKDIR /app
-COPY pyproject.toml poetry.lock .
+COPY pyproject.toml poetry.lock ./
 RUN poetry config virtualenvs.create false \
-  && poetry install --without=dev --no-interaction --no-ansi
+  && poetry install --without=dev --no-interaction --no-ansi --no-root
 # requirements should not be reinstalled on every rebuild
-COPY ./src/ ./.env .
+COPY ./src/ ./.env ./
 CMD ["poetry", "run", "python", "main.py"]
