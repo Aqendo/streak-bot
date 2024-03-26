@@ -352,7 +352,7 @@ async def autodelete_handler(
         or command.args.lower() not in ["on", "off"]
     ):
         msg = await message.reply(
-            f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/autodelete \<on\/off\>`\n_Enables or disabled autodeleting messages in groups \(admins only\)_",
+            f"{Emoji.CROSS} Not enough arguments\.\n**USAGE**:\n`/autodelete \<on\/off\>`\n_Enables or disables autodeleting messages in groups \(admins only\)_",
             parse_mode="MarkdownV2",
         )
         await delete_if_chat(autodelete, message, msg)
