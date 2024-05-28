@@ -605,7 +605,8 @@ async def set_streak(message: Message, autodelete: bool) -> None:
     session_result.streak = datetime.datetime.now() - datetime.timedelta(days=days)
     session.add(session_result)
     await session.commit()
-    msg = await message.answer(f"{Emoji.TICK} Now your streak is {days} days")
+    days_str = "days" if days != 1 else "day"
+    msg = await message.answer(f"{Emoji.TICK} Now your streak is {days} " + days_str)
     await delete_if_chat(autodelete, message, msg)
 
 
