@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "nofap-bot"
+name = "streak-bot"
 version = "0.0.1"
 description = ""
 authors = ["Aqendo <a@aqendo.nl>"]
